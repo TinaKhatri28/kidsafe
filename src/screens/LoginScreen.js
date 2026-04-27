@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { AuthService } from "../src/services/AuthService";
+import { AuthService } from "../services/AuthService";
 
 export default function LoginPage() {
   const router = useRouter();
