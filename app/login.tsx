@@ -1,156 +1,242 @@
-import React, { useState } from 'react';
+import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, Alert
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { AuthService } from '../src/services/AuthService';
+  ActivityIndicator,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useUser } from "../src/context/UserContext";
+import { AuthService } from "../src/services/AuthService";
 
-export default function LoginPage() {
+export default function LoginScreen() {
   const router = useRouter();
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
+  const { setUser } = useUser();
+
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<"phone" | "otp">("phone");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleSendOTP = async () => {
-    if (phone.length !== 10) {
-      Alert.alert('Invalid', 'Enter a valid 10-digit number');
-      return;
-    }
+  async function handleSendOTP() {
+    setError("");
     setLoading(true);
-    await AuthService.sendOTP(phone);
-    setOtpSent(true);
-    setLoading(false);
-  };
+    try {
+      const res = await AuthService.sendOTP(phone);
+      if (res.success) setStep("otp");
+    } catch (e: any) {
+      setError(e.message ?? "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const handleVerifyOTP = async () => {
+  async function handleVerifyOTP() {
+    setError("");
     setLoading(true);
-    const result = await AuthService.verifyOTP(phone, otp);
-    setLoading(false);
-    if (result.success) {
-      router.replace('/ParentHome');
-    } else {
-      Alert.alert('Wrong OTP', 'Try again. Use 1234 in prototype.');
+    try {
+      const res = await AuthService.verifyOTP(Number(phone), otp);
+      if (res.success) {
+        // Save user globally — all screens can read this now
+        setUser(res.user);
+        router.replace(`/${res.role}` as any);
+      } else {
+        setError("Incorrect OTP. Try again.");
+      }
+    } catch (e: any) {
+      setError(e.message ?? "Something went wrong");
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={styles.splashWrapper} pointerEvents="none">
-        <View style={styles.orangeParallelogram} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#FF8A00" />
+      <View style={styles.header}>
+        <Text style={styles.title}>KidSafe</Text>
+        <Text style={styles.subtitle}>School Bus Safety Platform</Text>
       </View>
-
-      <View style={styles.content}>
-        <View style={{ height: 190 }} />
-        <Text style={styles.brandName}>KidSafe</Text>
-        <View style={styles.brandUnderline} />
-        <Text style={styles.tagline}>Track your child's bus, live</Text>
-
-        <View style={styles.card}>
-          <View style={styles.inputPill}>
+      <View style={styles.card}>
+        {step === "phone" ? (
+          <>
+            <Text style={styles.label}>Mobile Number</Text>
+            <View style={styles.inputRow}>
+              <Text style={styles.countryCode}>+91</Text>
+              <TextInput
+                style={styles.input}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="9999999991"
+                placeholderTextColor="#aaa"
+                keyboardType="phone-pad"
+                maxLength={10}
+                autoFocus
+              />
+            </View>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <TouchableOpacity
+              style={[styles.btn, phone.length < 10 && styles.btnDisabled]}
+              onPress={handleSendOTP}
+              disabled={phone.length < 10 || loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.btnText}>Send OTP</Text>
+              )}
+            </TouchableOpacity>
+            <View style={styles.hint}>
+              <Text style={styles.hintTitle}>Demo Numbers</Text>
+              <Text style={styles.hintRow}>9999999991 → Parent</Text>
+              <Text style={styles.hintRow}>9999999992 → Driver</Text>
+              <Text style={styles.hintRow}>9999999993 → Conductor</Text>
+              <Text style={styles.hintRow}>9999999994 → Admin</Text>
+              <Text style={styles.hintOtp}>OTP: check terminal</Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity
+              onPress={() => {
+                setStep("phone");
+                setOtp("");
+                setError("");
+              }}
+            >
+              <Text style={styles.back}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={styles.label}>Enter OTP</Text>
+            <Text style={styles.phoneSent}>Sent to +91 {phone}</Text>
             <TextInput
-              style={styles.inputText}
-              placeholder="+91-Phone no."
-              placeholderTextColor="#9C7D5A"
-              keyboardType="phone-pad"
-              maxLength={10}
-              value={phone}
-              onChangeText={setPhone}
-            />
-          </View>
-
-          <View style={[styles.inputPill, { marginTop: 16 }]}>
-            <TextInput
-              style={styles.inputText}
-              placeholder="OTP"
-              placeholderTextColor="#9C7D5A"
-              keyboardType="number-pad"
-              maxLength={4}
+              style={[styles.input, styles.otpInput]}
               value={otp}
               onChangeText={setOtp}
+              placeholder="----"
+              placeholderTextColor="#aaa"
+              keyboardType="number-pad"
+              maxLength={4}
+              autoFocus
             />
-          </View>
-
-          <TouchableOpacity onPress={otpSent ? handleSendOTP : undefined}>
-            <Text style={styles.notReceived}>Not Received?</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.sendBtn}
-            onPress={otpSent ? handleVerifyOTP : handleSendOTP}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.sendBtnText}>
-              {loading ? 'Please wait...' : otpSent ? 'Verify OTP' : 'Send OTP'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.terms}>
-          {'By continuing , you agree to our\n'}
-          <Text style={styles.link}>Terms of Services</Text>
-          <Text style={styles.termsGray}> & </Text>
-          <Text style={styles.link}>Privacy Policy</Text>
-        </Text>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <TouchableOpacity
+              style={[styles.btn, otp.length < 4 && styles.btnDisabled]}
+              onPress={handleVerifyOTP}
+              disabled={otp.length < 4 || loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.btnText}>Verify & Continue</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        )}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  splashWrapper: {
-    position: 'absolute', top: 0, left: 0,
-    width: '100%', height: 220, overflow: 'hidden', zIndex: 0,
+  container: { flex: 1, backgroundColor: "#0A0A0A" },
+  header: { paddingTop: 100, paddingBottom: 40, alignItems: "center" },
+  title: {
+    fontSize: 36,
+    fontWeight: "900",
+    color: "#FF8A00",
+    letterSpacing: -0.5,
   },
-  orangeParallelogram: {
-    position: 'absolute', top: -30, left: -20,
-    width: 260, height: 250, backgroundColor: '#FF8A00',
-    transform: [{ skewY: '-10deg' }, { skewX: '5deg' }],
-    borderBottomRightRadius: 20,
-  },
-  content: { flex: 1, paddingHorizontal: 26, zIndex: 1 },
-  brandName: {
-    fontSize: 38, fontWeight: '900', color: '#111111',
-    textAlign: 'center', letterSpacing: -0.5,
-  },
-  brandUnderline: {
-    width: 110, height: 3, backgroundColor: '#FF8A00',
-    alignSelf: 'center', borderRadius: 2, marginTop: 6,
-  },
-  tagline: {
-    textAlign: 'center', fontSize: 15, color: '#888484',
-    fontWeight: '400', marginTop: 10, marginBottom: 24,
+  subtitle: {
+    fontSize: 13,
+    color: "#666",
+    marginTop: 4,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   card: {
-    backgroundColor: '#F6C790', borderRadius: 22,
-    paddingHorizontal: 22, paddingVertical: 26,
+    marginHorizontal: 24,
+    backgroundColor: "#141414",
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "#222",
   },
-  inputPill: {
-    borderWidth: 1.5, borderColor: '#C49060', borderRadius: 30,
-    backgroundColor: '#F6C790', paddingHorizontal: 18,
-    paddingVertical: Platform.OS === 'ios' ? 13 : 2,
-    justifyContent: 'center',
+  label: { fontSize: 14, color: "#999", marginBottom: 10, fontWeight: "600" },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1C1C1C",
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#2A2A2A",
+    marginBottom: 14,
+    overflow: "hidden",
   },
-  inputText: { fontSize: 16, color: '#5A3E2B' },
-  notReceived: {
-    fontSize: 13, color: '#FF8A00', fontWeight: '700',
-    marginTop: 12, marginBottom: 18,
+  countryCode: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    color: "#aaa",
+    fontWeight: "700",
+    fontSize: 15,
+    borderRightWidth: 1,
+    borderRightColor: "#2A2A2A",
   },
-  sendBtn: {
-    backgroundColor: '#FF8A00', borderRadius: 30,
-    paddingVertical: 15, alignItems: 'center',
+  input: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+    letterSpacing: 1,
   },
-  sendBtnText: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', letterSpacing: 0.3 },
-  terms: {
-    textAlign: 'center', fontSize: 12, color: '#888484',
-    marginTop: 20, lineHeight: 22,
+  otpInput: {
+    borderWidth: 1.5,
+    borderColor: "#2A2A2A",
+    borderRadius: 10,
+    backgroundColor: "#1C1C1C",
+    marginBottom: 14,
+    fontSize: 28,
+    textAlign: "center",
+    letterSpacing: 8,
+    flex: 0,
   },
-  termsGray: { color: '#888484' },
-  link: { color: '#FF8A00', fontWeight: '600' },
+  btn: {
+    backgroundColor: "#FF8A00",
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  btnDisabled: { opacity: 0.4 },
+  btnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  error: { color: "#EF4444", fontSize: 13, marginBottom: 10 },
+  back: { color: "#999", fontSize: 14, fontWeight: "600", marginBottom: 14 },
+  phoneSent: {
+    color: "#FF8A00",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 14,
+  },
+  hint: {
+    marginTop: 20,
+    padding: 14,
+    backgroundColor: "#1A1A1A",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#2A2A2A",
+  },
+  hintTitle: {
+    color: "#555",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  hintRow: { color: "#777", fontSize: 13, marginBottom: 3 },
+  hintOtp: { color: "#FF8A00", fontSize: 13, fontWeight: "700", marginTop: 6 },
 });

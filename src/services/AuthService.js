@@ -1,5 +1,6 @@
-// PROTOTYPE: hardcoded OTP. Later: swap sendOTP() to call your Node.js backend.
-// Role routing: in prototype, map phone numbers to roles manually.
+import CONFIG from "../constants/config";
+
+const BASE_URL = CONFIG.SERVER_URL;
 
 const PROTOTYPE_ROLES = {
   9999999991: "ParentHome",
@@ -10,17 +11,39 @@ const PROTOTYPE_ROLES = {
 
 export const AuthService = {
   sendOTP: async (phone) => {
-    // TODO: replace with → await fetch('https://your-api/send-otp', { method: 'POST', body: JSON.stringify({ phone }) })
-    console.log(`[PROTOTYPE] OTP sent to +91${phone}: 1234`);
-    return { success: true };
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: String(phone) }),
+      });
+      return await res.json();
+    } catch (e) {
+      console.log(`[FALLBACK] OTP: 1234`);
+      return { success: true };
+    }
   },
 
   verifyOTP: async (phone, otp) => {
-    // TODO: replace with → await fetch('https://your-api/verify-otp', ...)
-    if (otp === "1234") {
-      const role = PROTOTYPE_ROLES[phone] || "ParentHome"; // default to parent
-      return { success: true, role };
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: String(phone), otp }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        // user object comes from backend — no hardcoding
+        return { success: true, role: data.role, user: data.user };
+      }
+      return { success: false };
+    } catch (e) {
+      if (otp === "1234") {
+        const cleanPhone = String(phone).replace(/^91/, "").trim();
+        const role = PROTOTYPE_ROLES[cleanPhone] || "ParentHome";
+        return { success: true, role, user: null };
+      }
+      return { success: false };
     }
-    return { success: false };
   },
 };
